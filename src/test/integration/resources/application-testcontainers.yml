@@ -1,0 +1,49 @@
+# Testcontainers 전용 프로파일 — 통합 테스트가 @ActiveProfiles("testcontainers") 로 켠다.
+#
+# 데이터소스 URL·계정은 TestcontainersConfiguration.Initializer 가 컨테이너 값으로 덮는다. 여기의 논리 키는
+# 기본 application.yml 의 나머지 플레이스홀더(Redis·Core API 등)를 해석시키기 위한 테스트 고정값이다.
+
+server:
+  port: 0  # 랜덤 포트 사용
+
+db-host: localhost
+db-reader-username: test
+db-reader-password: test
+db-writer-username: test
+db-writer-password: test
+redis-host: localhost
+core-api-url: http://localhost:8080
+
+spring:
+  datasource:
+    main:
+      read:
+        hikari:
+          maximum-pool-size: 2
+      write:
+        hikari:
+          maximum-pool-size: 2
+    sub:
+      read:
+        hikari:
+          maximum-pool-size: 2
+      write:
+        hikari:
+          maximum-pool-size: 2
+
+  data:
+    redis:
+      # Initializer 가 cluster.nodes 를 컨테이너 주소로 덮어쓴다(관리형 Redis 와 같은 단일 엔드포인트 클러스터).
+      cluster:
+        nodes:
+          - localhost:6379
+      password:
+      ssl:
+        enabled: false
+
+  cache:
+    type: simple  # Redis 대신 ConcurrentMapCache 사용
+
+springdoc:
+  api-docs:
+    enabled: false

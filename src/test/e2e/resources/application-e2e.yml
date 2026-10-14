@@ -1,0 +1,16 @@
+# E2E 프로필 — e2eTest 태스크가 local,e2e 로 켠다. 앱을 프로세스 안에서 띄우고(RANDOM_PORT)
+# docker compose 로 띄운 MySQL·Redis(local 프로필 값)에 붙는다.
+#
+# 실행: docker compose up -d && ./gradlew e2eTest
+
+server:
+  port: 0 # 랜덤 포트 사용
+
+spring:
+  application:
+    name: internal-api-skeleton-e2e
+
+logging:
+  level:
+    root: INFO
+    com.rex: DEBUG

@@ -1,0 +1,166 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: internal-api-skeleton
+
+  threads:
+    virtual:
+      enabled: true # 가상 스레드 활성화
+
+  # 업무 스키마 2개(main @Primary, sub). 호스트·계정은 논리 키로 받는다 — README 「설정과 비밀값」 참고.
+  # 풀 크기는 환경변수로 덮는다: SPRING_DATASOURCE_MAIN_READ_HIKARI_MAXIMUMPOOLSIZE=20
+  datasource:
+    main:
+      read:
+        url: jdbc:mysql://${db-read-host:${db-host}}:${db-port:3306}/skeleton_main
+        username: ${db-reader-username}
+        password: ${db-reader-password}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        type: com.zaxxer.hikari.HikariDataSource
+        hikari:
+          poolName: internalApiSkeletonMainReadPool
+          auto-commit: false
+          max-lifetime: 30000
+          maximum-pool-size: 10
+      write:
+        url: jdbc:mysql://${db-host}:${db-port:3306}/skeleton_main
+        username: ${db-writer-username}
+        password: ${db-writer-password}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        type: com.zaxxer.hikari.HikariDataSource
+        hikari:
+          poolName: internalApiSkeletonMainWritePool
+          auto-commit: false
+          max-lifetime: 30000
+          maximum-pool-size: 5
+    sub:
+      read:
+        url: jdbc:mysql://${db-read-host:${db-host}}:${db-port:3306}/skeleton_sub
+        username: ${db-reader-username}
+        password: ${db-reader-password}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        type: com.zaxxer.hikari.HikariDataSource
+        hikari:
+          poolName: internalApiSkeletonSubReadPool
+          auto-commit: false
+          max-lifetime: 30000
+          maximum-pool-size: 10
+      write:
+        url: jdbc:mysql://${db-host}:${db-port:3306}/skeleton_sub
+        username: ${db-writer-username}
+        password: ${db-writer-password}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        type: com.zaxxer.hikari.HikariDataSource
+        hikari:
+          poolName: internalApiSkeletonSubWritePool
+          auto-commit: false
+          max-lifetime: 30000
+          maximum-pool-size: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: false
+    properties:
+      hibernate:
+        show_sql: false
+        format_sql: false
+
+
+  data:
+    redis:
+      host: ${redis-host}
+      port: ${redis-port:6379}
+      password: ${redis-password:}
+      ssl:
+        enabled: ${redis-ssl-enabled:false}
+
+  cache:
+    redis:
+      time-to-live: "10m"
+
+  # 비밀값 출처 — 클라우드 연동은 기본으로 꺼 두고 aws·azure·gcp 프로필이 자기 것만 켠다
+  cloud:
+    aws:
+      secretsmanager:
+        enabled: false
+    azure:
+      keyvault:
+        secret:
+          property-source-enabled: false
+    gcp:
+      core:
+        enabled: false
+      secretmanager:
+        enabled: false
+
+springdoc:
+  show-actuator: true
+  enable-kotlin: true
+  writer-with-default-pretty-printer: true
+  writer-with-order-by-keys: true
+
+  api-docs:
+    enabled: false
+    resolve-schema-properties: true
+
+  swagger-ui:
+    path: /swagger-ui.html
+    groups-order: ASC
+    doc-expansion: none
+    tags-sorter: alpha
+    operationsSorter: method
+    disable-swagger-default-url: false
+    display-request-duration: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+decorator:
+  datasource:
+    datasource-proxy:
+      query:
+        log-level: debug
+      slow-query:
+        log-level: warn
+      format-sql: true
+      count-query: true
+
+app:
+  audit:
+    # X-User-Id 헤더를 감사 주체로 신뢰할지. 기본값 false.
+    # 헤더는 외부 입력이라 그대로 신뢰하면 호출자가 다른 사용자의 ID 로
+    # 감사 기록을 위조할 수 있다. 게이트웨이·프록시가 인증 결과로 이 헤더를
+    # 덮어쓰고 외부에서 들어온 같은 이름의 헤더를 제거하는 배치에서만 켠다.
+    trust-user-header: false
+  client:
+    properties:
+      http-client:
+        connection-timeout: 5000
+      web-client:
+        # 2*1024*1024
+        memory-size: 2097152
+      connection:
+        max-connections: 30
+        max-idle-time: 5
+        max-life-time: 5
+        pending-acquire-timeout: 5
+        pending-acquire-max-count: 60
+        evict-in-background: 5
+    destinations:
+      core:
+        url: ${core-api-url}
+  redis:
+    # 관리형 Redis 클러스터(단일 엔드포인트)면 true — RedisConfiguration 참고. 기본은 Boot 자동 구성(standalone)
+    managed-cluster: ${redis-managed-cluster:false}

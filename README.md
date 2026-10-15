@@ -360,6 +360,10 @@ webClientUtil.get(
 - [`CLAUDE.md`](CLAUDE.md) — Claude Code 작업 지침
 - [`AGENTS.md`](AGENTS.md) — 에이전트 작업 진입점
 
+## 라이선스
+
+MIT — [LICENSE](LICENSE). 이 템플릿으로 만든 프로젝트는 `LICENSE` 를 지우거나 그 프로젝트의 라이선스로 바꾼다.
+
 ## 에이전트 지침
 
 에이전트 작업의 진입점은 [AGENTS.md](AGENTS.md)다. 프로젝트 규칙은 `CLAUDE.md`와 README 「코딩 규약」 원본을 공유한다. `.claude/rules/**/*.md`가 있으면 `AGENTS.md`의 탐색 절차에 따라 직접 읽으며, `paths`가 없는 규칙은 항상 적용하고 있는 규칙은 작업 경로에 맞춰 적용한다. 규칙 본문을 별도 사본으로 복제하지 않는다.

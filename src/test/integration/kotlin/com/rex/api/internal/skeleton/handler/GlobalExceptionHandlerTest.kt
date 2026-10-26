@@ -1,25 +1,13 @@
 package com.rex.api.internal.skeleton.handler
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.rex.api.internal.skeleton.config.IntegrationTestConfiguration
 import com.rex.api.internal.skeleton.config.TestcontainersConfiguration
-import com.rex.api.internal.skeleton.enums.ErrorCode
-import com.rex.api.internal.skeleton.exception.ApiCallException
-import com.rex.api.internal.skeleton.exception.ClientBadRequestException
-import com.rex.api.internal.skeleton.exception.CodedException
-import com.rex.api.internal.skeleton.exception.InvalidRequestParameterException
-import com.rex.api.internal.skeleton.exception.ItemNotFoundException
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.string.shouldContain
-import jakarta.validation.Valid
-import jakarta.validation.constraints.Email
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.Size
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
-import org.springframework.http.ResponseEntity
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.ContextConfiguration
 import org.springframework.test.web.servlet.MockMvc
@@ -27,13 +15,18 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
-import java.io.IOException
 
+/**
+ * GlobalExceptionHandler 통합 테스트.
+ *
+ * Testcontainers를 통해 데이터베이스와 연동하여 예외 처리를 테스트합니다.
+ * 예외 발생용 엔드포인트는 [TestExceptionController] 에 있다.
+ *
+ * 테스트 실행:
+ * ```bash
+ * ./gradlew integrationTest --tests "*.handler.GlobalExceptionHandlerTest"
+ * ```
+ */
 @SpringBootTest
 @ContextConfiguration(initializers = [TestcontainersConfiguration.Initializer::class])
 @ActiveProfiles("testcontainers")
@@ -41,202 +34,192 @@ import java.io.IOException
 @AutoConfigureMockMvc
 class GlobalExceptionHandlerTest(
     private val mockMvc: MockMvc,
-) : DescribeSpec({
+) : DescribeSpec() {
 
-    describe("GlobalExceptionHandler") {
+    init {
+        describe("GlobalExceptionHandler") {
 
-        describe("Custom Exception Handlers") {
+            describe("Custom Exception Handlers") {
 
-            it("should handle ItemNotFoundException with 404 status") {
-                mockMvc
-                    .perform(get("/test/exception/item-not-found"))
-                    .andExpect(status().isNotFound)
-                    .andExpect(jsonPath("$.code").value("NOT_FOUND_ERROR"))
-                    .andExpect(jsonPath("$.reason").value("User with id 123 not found"))
+                it("should handle ItemNotFoundException with 404 status") {
+                    mockMvc
+                        .perform(get("/test/exception/item-not-found"))
+                        .andExpect(status().isNotFound)
+                        .andExpect(jsonPath("$.code").value("NOT_FOUND_ERROR"))
+                        .andExpect(jsonPath("$.reason").value("User with id 123 not found"))
+                }
+
+                it("should handle ClientBadRequestException with 400 status") {
+                    mockMvc
+                        .perform(get("/test/exception/client-bad-request"))
+                        .andExpect(status().isBadRequest)
+                        .andExpect(jsonPath("$.code").value("BAD_REQUEST_ERROR"))
+                        .andExpect(jsonPath("$.reason").value("Invalid client request"))
+                }
+
+                it("should handle InvalidRequestParameterException with 400 status") {
+                    mockMvc
+                        .perform(get("/test/exception/invalid-parameter"))
+                        .andExpect(status().isBadRequest)
+                        .andExpect(jsonPath("$.code").value("BAD_REQUEST_ERROR"))
+                        .andExpect(jsonPath("$.reason").value("Parameter 'id' must be positive"))
+                }
+
+                it("should handle ApiCallException with the status of its errorCode and a fixed reason") {
+                    mockMvc
+                        .perform(get("/test/exception/api-call"))
+                        .andExpect(status().isServiceUnavailable)
+                        .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE_ERROR"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.EXTERNAL_SERVICE_ERROR))
+                }
+
+                it("should handle WebClientRequestException as 503 SERVICE_UNAVAILABLE_ERROR") {
+                    mockMvc
+                        .perform(get("/test/exception/web-client-request"))
+                        .andExpect(status().isServiceUnavailable)
+                        .andExpect(jsonPath("$.status").value(503))
+                        .andExpect(jsonPath("$.divisionCode").value("G016"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.EXTERNAL_SERVICE_ERROR))
+                }
             }
 
-            it("should handle ClientBadRequestException with 400 status") {
-                mockMvc
-                    .perform(get("/test/exception/client-bad-request"))
-                    .andExpect(status().isBadRequest)
-                    .andExpect(jsonPath("$.code").value("BAD_REQUEST_ERROR"))
-                    .andExpect(jsonPath("$.reason").value("Invalid client request"))
-            }
+            describe("Validation with @JsonProperty mapping") {
 
-            it("should handle InvalidRequestParameterException with 400 status") {
-                mockMvc
-                    .perform(get("/test/exception/invalid-parameter"))
-                    .andExpect(status().isBadRequest)
-                    .andExpect(jsonPath("$.code").value("BAD_REQUEST_ERROR"))
-                    .andExpect(jsonPath("$.reason").value("Parameter 'id' must be positive"))
-            }
+                it("should map field names using @JsonProperty in validation errors") {
+                    val invalidJson =
+                        """
+                        {
+                            "user_name": "",
+                            "user_email": "invalid-email"
+                        }
+                        """.trimIndent()
 
-            it("should handle ApiCallException with the status of its errorCode") {
-                mockMvc
-                    .perform(get("/test/exception/api-call"))
-                    .andExpect(status().isServiceUnavailable)
-                    .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE_ERROR"))
-                    .andExpect(jsonPath("$.reason").value("External service is unavailable"))
-            }
-        }
+                    val result =
+                        mockMvc
+                            .perform(
+                                post("/test/exception/validate")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(invalidJson),
+                            ).andExpect(status().isBadRequest)
+                            .andReturn()
 
-        describe("Validation with @JsonProperty mapping") {
+                    val responseBody = result.response.contentAsString
 
-            it("should map field names using @JsonProperty in validation errors") {
-                val invalidJson =
-                    """
-                    {
-                        "user_name": "",
-                        "user_email": "invalid-email"
-                    }
-                    """.trimIndent()
+                    // @JsonProperty name should be used instead of field name
+                    responseBody shouldContain "user_name"
+                    responseBody shouldContain "user_email"
+                }
 
-                val result =
+                it("should return validation error for missing required fields") {
+                    val invalidJson = """{}"""
+
                     mockMvc
                         .perform(
                             post("/test/exception/validate")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidJson),
                         ).andExpect(status().isBadRequest)
-                        .andReturn()
+                        .andExpect(jsonPath("$.code").value("NOT_VALID_ERROR"))
+                }
 
-                val responseBody = result.response.contentAsString
+                it("should keep the 'field: message' reason composition") {
+                    val invalidJson = """{"user_name": "kim", "user_email": "invalid-email"}"""
 
-                // @JsonProperty name should be used instead of field name
-                responseBody shouldContain "user_name"
-                responseBody shouldContain "user_email"
+                    mockMvc
+                        .perform(
+                            post("/test/exception/validate")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(invalidJson),
+                        ).andExpect(status().isBadRequest)
+                        .andExpect(jsonPath("$.reason").value("user_email: 유효한 이메일 형식이어야 합니다"))
+                }
+
+                it("should compose ConstraintViolationException as 'parameter: message'") {
+                    mockMvc
+                        .perform(get("/test/exception/constraint"))
+                        .andExpect(status().isBadRequest)
+                        .andExpect(jsonPath("$.code").value("NOT_VALID_ERROR"))
+                        .andExpect(jsonPath("$.reason").value("userName: 이름은 2~50자 사이여야 합니다"))
+                }
             }
 
-            it("should return validation error for missing required fields") {
-                val invalidJson = """{}"""
+            describe("Request Shape Handlers") {
 
-                mockMvc
-                    .perform(
-                        post("/test/exception/validate")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(invalidJson),
-                    ).andExpect(status().isBadRequest)
-                    .andExpect(jsonPath("$.code").value("NOT_VALID_ERROR"))
+                it("should answer a missing header with 400 NOT_VALID_HEADER_ERROR") {
+                    mockMvc
+                        .perform(get("/test/exception/missing-header"))
+                        .andExpect(status().isBadRequest)
+                        .andExpect(jsonPath("$.code").value("NOT_VALID_HEADER_ERROR"))
+                        .andExpect(jsonPath("$.divisionCode").value("G012"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.missingHeader("X-Test-Header")))
+                }
+
+                it("should name a missing parameter in the reason") {
+                    mockMvc
+                        .perform(get("/test/exception/missing-param"))
+                        .andExpect(status().isBadRequest)
+                        .andExpect(jsonPath("$.code").value("MISSING_REQUEST_PARAMETER_ERROR"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.missingParameter("size")))
+                }
+
+                it("should answer a standalone JacksonException with 400 JACKSON_PROCESS_ERROR") {
+                    mockMvc
+                        .perform(get("/test/exception/jackson"))
+                        .andExpect(status().isBadRequest)
+                        .andExpect(jsonPath("$.code").value("JACKSON_PROCESS_ERROR"))
+                        .andExpect(jsonPath("$.divisionCode").value("G007"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.MALFORMED_BODY))
+                }
             }
 
-            it("should keep the 'field: message' reason composition") {
-                val invalidJson = """{"user_name": "kim", "user_email": "invalid-email"}"""
+            describe("Standard Exception Handlers") {
 
-                mockMvc
-                    .perform(
-                        post("/test/exception/validate")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(invalidJson),
-                    ).andExpect(status().isBadRequest)
-                    .andExpect(jsonPath("$.reason").value("user_email: 유효한 이메일 형식이어야 합니다"))
-            }
-        }
+                it("should handle IllegalArgumentException with a fixed reason") {
+                    mockMvc
+                        .perform(get("/test/exception/illegal-argument"))
+                        .andExpect(status().isBadRequest)
+                        .andExpect(jsonPath("$.code").value("NOT_VALID_ERROR"))
+                        .andExpect(jsonPath("$.status").value(400))
+                        .andExpect(jsonPath("$.divisionCode").value("G011"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.INVALID_VALUE))
+                }
 
-        describe("Standard Exception Handlers") {
+                it("should handle NullPointerException with 500 status in both HTTP and body") {
+                    mockMvc
+                        .perform(get("/test/exception/null-pointer"))
+                        .andExpect(status().isInternalServerError)
+                        .andExpect(jsonPath("$.code").value("NULL_POINT_ERROR"))
+                        .andExpect(jsonPath("$.status").value(500))
+                        .andExpect(jsonPath("$.divisionCode").value("G010"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.SERVER_ERROR))
+                }
 
-            it("should handle IllegalArgumentException with 400 status") {
-                mockMvc
-                    .perform(get("/test/exception/illegal-argument"))
-                    .andExpect(status().isBadRequest)
-                    .andExpect(jsonPath("$.code").value("NOT_VALID_ERROR"))
-                    .andExpect(jsonPath("$.status").value(400))
-                    .andExpect(jsonPath("$.divisionCode").value("G011"))
-                    .andExpect(jsonPath("$.reason").value("Invalid argument provided"))
-            }
+                it("should handle IOException with 500 status in both HTTP and body") {
+                    mockMvc
+                        .perform(get("/test/exception/io"))
+                        .andExpect(status().isInternalServerError)
+                        .andExpect(jsonPath("$.code").value("IO_ERROR"))
+                        .andExpect(jsonPath("$.status").value(500))
+                        .andExpect(jsonPath("$.divisionCode").value("G005"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.SERVER_ERROR))
+                }
 
-            it("should handle NullPointerException with 500 status in both HTTP and body") {
-                mockMvc
-                    .perform(get("/test/exception/null-pointer"))
-                    .andExpect(status().isInternalServerError)
-                    .andExpect(jsonPath("$.code").value("NULL_POINT_ERROR"))
-                    .andExpect(jsonPath("$.status").value(500))
-                    .andExpect(jsonPath("$.divisionCode").value("G010"))
-            }
+                it("should handle NoSuchElementException with 404 status and a fixed reason") {
+                    mockMvc
+                        .perform(get("/test/exception/no-such-element"))
+                        .andExpect(status().isNotFound)
+                        .andExpect(jsonPath("$.code").value("NOT_FOUND_ERROR"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.TARGET_NOT_FOUND))
+                }
 
-            it("should handle IOException with 500 status in both HTTP and body") {
-                mockMvc
-                    .perform(get("/test/exception/io"))
-                    .andExpect(status().isInternalServerError)
-                    .andExpect(jsonPath("$.code").value("IO_ERROR"))
-                    .andExpect(jsonPath("$.status").value(500))
-                    .andExpect(jsonPath("$.divisionCode").value("G005"))
-            }
-
-            it("should handle NoSuchElementException with 404 status") {
-                mockMvc
-                    .perform(get("/test/exception/no-such-element"))
-                    .andExpect(status().isNotFound)
-                    .andExpect(jsonPath("$.code").value("NOT_FOUND_ERROR"))
-                    .andExpect(jsonPath("$.reason").value("Element not found"))
-            }
-
-            it("should handle generic Exception with 500 status") {
-                mockMvc
-                    .perform(get("/test/exception/generic"))
-                    .andExpect(status().isInternalServerError)
-                    .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
-                    .andExpect(jsonPath("$.reason").value("Unexpected error occurred"))
+                it("should handle generic Exception with 500 status and a fixed reason") {
+                    mockMvc
+                        .perform(get("/test/exception/generic"))
+                        .andExpect(status().isInternalServerError)
+                        .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                        .andExpect(jsonPath("$.reason").value(ErrorReason.SERVER_ERROR))
+                }
             }
         }
     }
-})
-
-/**
- * Test controller for exception handling tests
- */
-@RestController
-@RequestMapping("/test/exception")
-class TestExceptionController {
-    @GetMapping("/item-not-found")
-    fun throwItemNotFoundException(): ResponseEntity<Any> = throw ItemNotFoundException("User with id 123 not found")
-
-    @GetMapping("/client-bad-request")
-    fun throwClientBadRequestException(): ResponseEntity<Any> = throw ClientBadRequestException("Invalid client request")
-
-    @GetMapping("/invalid-parameter")
-    fun throwInvalidRequestParameterException(): ResponseEntity<Any> = throw InvalidRequestParameterException("Parameter 'id' must be positive")
-
-    @GetMapping("/api-call")
-    fun throwApiCallException(): ResponseEntity<Any> = throw ApiCallException("External service is unavailable", ErrorCode.SERVICE_UNAVAILABLE_ERROR)
-
-    @GetMapping("/api-call-default")
-    fun throwDefaultApiCallException(): ResponseEntity<Any> = throw ApiCallException("Upstream responded with an error")
-
-    @GetMapping("/coded")
-    fun throwCodedException(): ResponseEntity<Any> = throw CodedException(ErrorCode.FORBIDDEN_ERROR, "이 작업을 수행할 권한이 없습니다")
-
-    @GetMapping("/null-pointer")
-    fun throwNullPointerException(): ResponseEntity<Any> = throw NullPointerException("value was null")
-
-    @GetMapping("/io")
-    fun throwIOException(): ResponseEntity<Any> = throw IOException("disk read failed")
-
-    @PostMapping("/validate")
-    fun validateRequest(
-        @Valid @RequestBody request: TestValidationRequest,
-    ): ResponseEntity<Any> = ResponseEntity.ok(request)
-
-    @GetMapping("/illegal-argument")
-    fun throwIllegalArgumentException(): ResponseEntity<Any> = throw IllegalArgumentException("Invalid argument provided")
-
-    @GetMapping("/no-such-element")
-    fun throwNoSuchElementException(): ResponseEntity<Any> = throw NoSuchElementException("Element not found")
-
-    @GetMapping("/generic")
-    fun throwGenericException(): ResponseEntity<Any> = throw RuntimeException("Unexpected error occurred")
 }
-
-/**
- * Test request model with @JsonProperty annotations
- * Note: @field:JsonProperty is required for Kotlin data classes to apply annotation to backing field
- */
-data class TestValidationRequest(
-    @field:NotBlank(message = "이름은 필수입니다")
-    @field:Size(min = 2, max = 50, message = "이름은 2~50자 사이여야 합니다")
-    @field:JsonProperty("user_name")
-    val userName: String?,
-    @field:NotBlank(message = "이메일은 필수입니다")
-    @field:Email(message = "유효한 이메일 형식이어야 합니다")
-    @field:JsonProperty("user_email")
-    val userEmail: String?,
-)

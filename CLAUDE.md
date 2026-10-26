@@ -185,7 +185,9 @@ This is a Spring Boot API skeleton project with a layered architecture designed 
    - **Business exceptions extend `CodedException`; the HTTP status and division code come from its `ErrorCode` alone.** For a new error, add an `ErrorCode` entry and `throw CodedException(ErrorCode.X)` — create a subclass only when the same code is thrown from several places or must be told apart in a `catch`. No constructor takes a string code
    - `GlobalExceptionHandler` handles `CodedException` in one handler. Every handler responds through `respond(errorCode, reason)`, so **the body `status` always equals the HTTP status**. No handler sets the HTTP status separately from the code
    - Common exceptions: `ClientBadRequestException` (400 G001) · `InvalidRequestParameterException` (400 G001) · `ItemNotFoundException` (404 G009) · `ApiCallException` (default 502 G014, unreachable upstream 503 G016)
-   - Detection: `ErrorCodeContractTest` (every code's status is 400–599, division codes unique) · `ErrorResponseContractIntegrationTest` (body `status` = HTTP status)
+   - **Response text is user-facing** — `reason` is the exception message for 4xx business exceptions, `field: validation message` for validation failures, and a fixed sentence from `handler/ErrorReason` otherwise (5xx included). `resultMessage` (= `ErrorCode.message`) is a human-readable title; codes shared across stacks use the same values as asp (canonical table: SKELETON `docs/error-codes.md`). Never put a cause's message, an upstream response text, or a URL into a business exception message — keep details in logs and `cause`
+   - Logging happens in one place, `respond` — 4xx `warn` (original message), 5xx `error` (stack trace)
+   - Detection: `ErrorCodeContractTest` (status 400–599, unique division codes, title format) · `ErrorResponseContractIntegrationTest` (body `status` = HTTP status, no internal details in response text)
 
 6. **Caching Pattern**
    - Use `@CacheableNullSafe` instead of `@Cacheable` to prevent caching null values

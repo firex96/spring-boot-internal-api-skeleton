@@ -74,5 +74,49 @@ class ErrorResponseContractIntegrationTest(
                     .andExpect(jsonPath("$.divisionCode").exists())
             }
         }
+
+        // 본문 status 와 HTTP 상태는 같은 곳(ErrorCode.status)에서 정해진다 — 갈라지면 소비자가 어느 쪽을 믿어야 할지 모른다.
+        describe("본문 status 는 HTTP 상태와 같다") {
+
+            it("검증 실패는 400 이고 본문 status 도 400 이다") {
+                mockMvc
+                    .perform(
+                        post("/test/exception/validate")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"),
+                    )
+                    .andExpect(status().isBadRequest)
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.code").value("NOT_VALID_ERROR"))
+                    .andExpect(jsonPath("$.divisionCode").value("G011"))
+            }
+
+            it("외부 API 응답 불가는 503 SERVICE_UNAVAILABLE_ERROR 다") {
+                mockMvc
+                    .perform(get("/test/exception/api-call"))
+                    .andExpect(status().isServiceUnavailable)
+                    .andExpect(jsonPath("$.status").value(503))
+                    .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE_ERROR"))
+                    .andExpect(jsonPath("$.divisionCode").value("G016"))
+            }
+
+            it("외부 API 호출 실패의 기본은 502 EXTERNAL_API_ERROR 다") {
+                mockMvc
+                    .perform(get("/test/exception/api-call-default"))
+                    .andExpect(status().isBadGateway)
+                    .andExpect(jsonPath("$.status").value(502))
+                    .andExpect(jsonPath("$.divisionCode").value("G014"))
+            }
+
+            it("CodedException 을 바로 던지면 그 코드의 상태로 응답한다") {
+                mockMvc
+                    .perform(get("/test/exception/coded"))
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.status").value(403))
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN_ERROR"))
+                    .andExpect(jsonPath("$.divisionCode").value("G008"))
+                    .andExpect(jsonPath("$.reason").value("이 작업을 수행할 권한이 없습니다"))
+            }
+        }
     }
 }

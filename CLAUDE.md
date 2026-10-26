@@ -182,10 +182,10 @@ This is a Spring Boot API skeleton project with a layered architecture designed 
    - `@Async` 는 같은 프록시 규칙 — 같은 클래스 안 호출은 동기. 비동기는 별도 빈(`ExampleAsyncProxyWorker`)으로. 검출 `AsyncSelfInvocationConventionTest`
 
 5. **Exception Handling Pattern**
-   - Custom exceptions implement `ExceptionCode` interface
-   - Use `ErrorCode` enum for standardized error codes
-   - `GlobalExceptionHandler` catches all exceptions centrally
-   - Common exceptions: `ItemNotFoundException`, `ClientBadRequestException`, `ApiCallException`
+   - **Business exceptions extend `CodedException`; the HTTP status and division code come from its `ErrorCode` alone.** For a new error, add an `ErrorCode` entry and `throw CodedException(ErrorCode.X)` — create a subclass only when the same code is thrown from several places or must be told apart in a `catch`. No constructor takes a string code
+   - `GlobalExceptionHandler` handles `CodedException` in one handler. Every handler responds through `respond(errorCode, reason)`, so **the body `status` always equals the HTTP status**. No handler sets the HTTP status separately from the code
+   - Common exceptions: `ClientBadRequestException` (400 G001) · `InvalidRequestParameterException` (400 G001) · `ItemNotFoundException` (404 G009) · `ApiCallException` (default 502 G014, unreachable upstream 503 G016)
+   - Detection: `ErrorCodeContractTest` (every code's status is 400–599, division codes unique) · `ErrorResponseContractIntegrationTest` (body `status` = HTTP status)
 
 6. **Caching Pattern**
    - Use `@CacheableNullSafe` instead of `@Cacheable` to prevent caching null values

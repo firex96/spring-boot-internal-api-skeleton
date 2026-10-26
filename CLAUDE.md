@@ -186,6 +186,7 @@ This is a Spring Boot API skeleton project with a layered architecture designed 
    - `GlobalExceptionHandler` handles `CodedException` in one handler. Every handler responds through `respond(errorCode, reason)`, so **the body `status` always equals the HTTP status**. No handler sets the HTTP status separately from the code
    - Common exceptions: `ClientBadRequestException` (400 G001) · `InvalidRequestParameterException` (400 G001) · `ItemNotFoundException` (404 G009) · `ApiCallException` (default 502 G014, unreachable upstream 503 G016)
    - **Response text is user-facing** — `reason` is the exception message for 4xx business exceptions, `field: validation message` for validation failures, and a fixed sentence from `handler/ErrorReason` otherwise (5xx included). `resultMessage` (= `ErrorCode.message`) is a human-readable title; codes shared across stacks use the same values as asp (canonical table: SKELETON `docs/error-codes.md`). Never put a cause's message, an upstream response text, or a URL into a business exception message — keep details in logs and `cause`
+   - The 5xx sentence is chosen by status: 502–504 get the upstream sentence (`ErrorReason.forServerError`)
    - Logging happens in one place, `respond` — 4xx `warn` (original message), 5xx `error` (stack trace)
    - Detection: `ErrorCodeContractTest` (status 400–599, unique division codes, title format) · `ErrorResponseContractIntegrationTest` (body `status` = HTTP status, no internal details in response text)
 
